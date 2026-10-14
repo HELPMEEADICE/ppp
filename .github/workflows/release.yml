@@ -3,6 +3,7 @@ name: Build release binaries
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -48,37 +49,37 @@ jobs:
           - target: linux-armel
             runner: ubuntu-22.04
             cc: arm-linux-gnueabi-gcc
-            packages: gcc-arm-linux-gnueabi
+            packages: gcc-arm-linux-gnueabi libc6-dev-armel-cross
             cflags: ''
             extension: ''
           - target: linux-armv7
             runner: ubuntu-22.04
             cc: arm-linux-gnueabihf-gcc
-            packages: gcc-arm-linux-gnueabihf
+            packages: gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
             cflags: ''
             extension: ''
           - target: linux-aarch64
             runner: ubuntu-22.04
             cc: aarch64-linux-gnu-gcc
-            packages: gcc-aarch64-linux-gnu
+            packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross
             cflags: ''
             extension: ''
           - target: linux-riscv64
             runner: ubuntu-22.04
             cc: riscv64-linux-gnu-gcc
-            packages: gcc-riscv64-linux-gnu
+            packages: gcc-riscv64-linux-gnu libc6-dev-riscv64-cross
             cflags: ''
             extension: ''
           - target: linux-ppc64le
             runner: ubuntu-22.04
             cc: powerpc64le-linux-gnu-gcc
-            packages: gcc-powerpc64le-linux-gnu
+            packages: gcc-powerpc64le-linux-gnu libc6-dev-ppc64el-cross
             cflags: ''
             extension: ''
           - target: linux-s390x
             runner: ubuntu-22.04
             cc: s390x-linux-gnu-gcc
-            packages: gcc-s390x-linux-gnu
+            packages: gcc-s390x-linux-gnu libc6-dev-s390x-cross
             cflags: ''
             extension: ''
           - target: macos-x86_64
@@ -130,9 +131,77 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  bsd-build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: freebsd-x86_64
+            os: freebsd
+            arch: x86-64
+            version: '15.1'
+          - target: freebsd-arm64
+            os: freebsd
+            arch: arm64
+            version: '15.1'
+          - target: openbsd-x86_64
+            os: openbsd
+            arch: x86-64
+            version: '7.9'
+          - target: openbsd-arm64
+            os: openbsd
+            arch: arm64
+            version: '7.9'
+          - target: netbsd-x86_64
+            os: netbsd
+            arch: x86-64
+            version: '11.0'
+          - target: netbsd-arm64
+            os: netbsd
+            arch: arm64
+            version: '11.0'
+          - target: dragonflybsd-x86_64
+            os: dragonflybsd
+            arch: x86-64
+            version: '6.4.2'
+
+    defaults:
+      run:
+        shell: cpa.sh {0}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Start ${{ matrix.os }} VM
+        uses: cross-platform-actions/action@v1.6.0
+        with:
+          operating_system: ${{ matrix.os }}
+          architecture: ${{ matrix.arch }}
+          version: '${{ matrix.version }}'
+          shell: sh
+          memory: 4G
+          cpu_count: 2
+
+      - name: Compile executable
+        run: |
+          mkdir -p dist
+          cc -std=c11 -O2 -Wall -Wextra -pedantic \
+            poppin_party.c -o "dist/poppin_party-${{ matrix.target }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: poppin-party-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     name: Attach binaries to GitHub Release
-    needs: build
+    if: github.event_name == 'release'
+    needs: [build, bsd-build]
     runs-on: ubuntu-22.04
     permissions:
       contents: write

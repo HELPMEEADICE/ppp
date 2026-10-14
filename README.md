@@ -14,7 +14,7 @@
 
 ## 使用
 
-从 GitHub Releases 下载与你的操作系统和 CPU 架构对应的可执行文件。Linux/macOS 下载后可在终端运行：
+从 GitHub Releases 下载与你的操作系统和 CPU 架构对应的可执行文件。Linux/macOS/BSD 下载后可在终端运行：
 
 ```sh
 chmod +x poppin_party-linux-x86_64
@@ -53,15 +53,18 @@ clang -std=c11 -O2 -Wall -Wextra -pedantic poppin_party.c -o poppin_party
 
 ## Release 构建目标
 
-在 GitHub 上发布一个 Release（发布已有草稿也可以）后，`.github/workflows/release.yml` 会自动编译并把二进制和 `SHA256SUMS.txt` 上传为该 Release 的附件：
+每次发布会构建 20 个平台/架构目标。
+
+在 GitHub 上发布一个 Release（发布已有草稿也可以）后，`.github/workflows/release.yml` 会自动编译并把二进制和 `SHA256SUMS.txt` 上传为该 Release 的附件。也可以从 Actions 页面手动运行构建矩阵来验证编译；手动运行不会上传 Release。BSD 目标通过 GitHub Actions 中的虚拟机编译：
 
 | 平台 | 架构 |
 | --- | --- |
 | Windows | x86_64、i686 |
 | Linux | x86_64（glibc、musl）、i686、armel、armv7 hard-float、aarch64、riscv64、ppc64le、s390x |
 | macOS | x86_64、arm64 / Apple Silicon |
+| BSD 系 | FreeBSD x86_64/arm64、OpenBSD x86_64/arm64、NetBSD x86_64/arm64、DragonFly BSD x86_64 |
 
-Linux 版本使用 Ubuntu 22.04 工具链构建；跨发行版运行时仍需满足目标架构对应的 libc 兼容要求。跨架构的可执行文件需要在相应硬件或模拟环境中运行。
+Linux 版本使用 Ubuntu 22.04 工具链构建；交叉工具链会显式安装目标架构的 libc 开发文件。glibc 版本跨发行版运行时仍需满足目标架构对应的 libc 兼容要求。BSD 版本由对应系统的虚拟机原生编译器构建。跨架构的可执行文件需要在相应硬件或模拟环境中运行。
 
 ## 许可证与图案素材
 
