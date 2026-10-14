@@ -1,0 +1,156 @@
+name: Build release binaries
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x86_64
+            runner: ubuntu-22.04
+            cc: x86_64-w64-mingw32-gcc
+            packages: gcc-mingw-w64-x86-64
+            cflags: -static
+            extension: .exe
+          - target: windows-i686
+            runner: ubuntu-22.04
+            cc: i686-w64-mingw32-gcc
+            packages: gcc-mingw-w64-i686
+            cflags: -static
+            extension: .exe
+          - target: linux-x86_64
+            runner: ubuntu-22.04
+            cc: gcc
+            packages: ''
+            cflags: ''
+            extension: ''
+          - target: linux-i686
+            runner: ubuntu-22.04
+            cc: gcc
+            packages: gcc-multilib
+            cflags: -m32
+            extension: ''
+          - target: linux-musl-x86_64
+            runner: ubuntu-22.04
+            cc: musl-gcc
+            packages: musl-tools
+            cflags: -static
+            extension: ''
+          - target: linux-armel
+            runner: ubuntu-22.04
+            cc: arm-linux-gnueabi-gcc
+            packages: gcc-arm-linux-gnueabi
+            cflags: ''
+            extension: ''
+          - target: linux-armv7
+            runner: ubuntu-22.04
+            cc: arm-linux-gnueabihf-gcc
+            packages: gcc-arm-linux-gnueabihf
+            cflags: ''
+            extension: ''
+          - target: linux-aarch64
+            runner: ubuntu-22.04
+            cc: aarch64-linux-gnu-gcc
+            packages: gcc-aarch64-linux-gnu
+            cflags: ''
+            extension: ''
+          - target: linux-riscv64
+            runner: ubuntu-22.04
+            cc: riscv64-linux-gnu-gcc
+            packages: gcc-riscv64-linux-gnu
+            cflags: ''
+            extension: ''
+          - target: linux-ppc64le
+            runner: ubuntu-22.04
+            cc: powerpc64le-linux-gnu-gcc
+            packages: gcc-powerpc64le-linux-gnu
+            cflags: ''
+            extension: ''
+          - target: linux-s390x
+            runner: ubuntu-22.04
+            cc: s390x-linux-gnu-gcc
+            packages: gcc-s390x-linux-gnu
+            cflags: ''
+            extension: ''
+          - target: macos-x86_64
+            runner: macos-15-intel
+            cc: clang
+            packages: ''
+            cflags: -arch x86_64
+            extension: ''
+          - target: macos-arm64
+            runner: macos-15
+            cc: clang
+            packages: ''
+            cflags: -arch arm64
+            extension: ''
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install cross compiler
+        if: runner.os == 'Linux' && matrix.packages != ''
+        env:
+          BUILD_PACKAGES: ${{ matrix.packages }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y $BUILD_PACKAGES
+
+      - name: Compile executable
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          CFLAGS: ${{ matrix.cflags }}
+          TARGET: ${{ matrix.target }}
+          EXTENSION: ${{ matrix.extension }}
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: |
+          mkdir -p dist
+          read -r -a extra_flags <<< "$CFLAGS"
+          output="dist/poppin_party-${TARGET}${EXTENSION}"
+          "$CC" -std=c11 -O2 -Wall -Wextra -pedantic \
+            "${extra_flags[@]}" poppin_party.c -o "$output"
+          file "$output"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: poppin-party-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Attach binaries to GitHub Release
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: poppin-party-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Upload assets to the published Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG_NAME" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
